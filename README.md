@@ -1,5 +1,3 @@
 # thumber
-Video thumbnail generation python example
 
-
-## This is my implementation as a beginner and is only meant as an example
+Video sprite, thumbnail and gif preview generation script.

@@ -1,10 +1,11 @@
-import os, subprocess, time
-
+import os
+import subprocess
+import time
 
 def make_thumbnail(file):
     length = int(
         subprocess.check_output(
-            f"ffprobe -i '{file}' -show_format -v quiet | sed -n 's/duration=//p' | xargs printf %.0f",
+            f"ffprobe -i '{file}' -show_format -v quiet | sed -n 's/duration=//p' | awk '{{printf (\"%d\",$0)}}'",
             shell=True,
         ).decode("utf-8")
     )
@@ -20,7 +21,7 @@ def make_preview(file):
     file = f"./{file}"
     length = int(
         subprocess.check_output(
-            f"ffprobe -i '{org_file}' -show_format -v quiet | sed -n 's/duration=//p' | xargs printf %.0f",
+            f"ffprobe -i '{org_file}' -show_format -v quiet | sed -n 's/duration=//p' | awk '{{printf (\"%d\",$0)}}'",
             shell=True,
         ).decode("utf-8")
     )
@@ -67,28 +68,27 @@ def make_sprite(file, gpu=False):
     file = f"./{file}"
     length = int(
         subprocess.check_output(
-            f"ffprobe -i '{org_file}' -show_format -v quiet | sed -n 's/duration=//p' | xargs printf %.0f",
+            f"ffprobe -i '{org_file}' -show_format -v quiet | sed -n 's/duration=//p' | awk '{{printf (\"%d\",$0)}}'",
             shell=True,
         ).decode("utf-8")
     )
     files = os.listdir()
-    sec = 2+interval
     count1 = 0
     out_files = []
+    time_left = length
     if length < 200:
-        frames = length
         interval = 1
     else:
-        frames = 200
-        interval = length / frames
+        interval = round(length / 200)
+    sec = interval
     if f"{org_file}-sprite.jpg" in files:
         if gpu:
             os.system(
-                f"ffmpeg -vsync 0 -hwaccel nvdec -c:v h264_cuvid -y -hide_banner -loglevel panic -ss 00:00:02 -i '{org_file}' -vframes 1 -q:v 1 {file}-output.jpg"
+                f"ffmpeg -vsync 0 -hwaccel nvdec -c:v h264_cuvid -y -hide_banner -loglevel panic -ss 00:00:00 -i '{org_file}' -vframes 1 -q:v 1 {file}-output.jpg"
             )
         else:
             os.system(
-                f"ffmpeg -y -hide_banner -loglevel panic -ss 00:00:02 -i '{org_file}' -vframes 1 -q:v 1 {file}-output.jpg"
+                f"ffmpeg -y -hide_banner -loglevel panic -ss 00:00:00 -i '{org_file}' -vframes 1 -q:v 1 {file}-output.jpg"
             )
         os.system(f"convert {file}-output.jpg -resize 320x180 {file}-output.jpg")
         resolution = (
@@ -107,14 +107,14 @@ def make_sprite(file, gpu=False):
         }
     if gpu:
         os.system(
-            f"ffmpeg -vsync 0 -hwaccel nvdec -c:v h264_cuvid -y -hide_banner -loglevel panic -ss 00:00:02 -i '{org_file}' -vframes 1 -q:v 1 {file}-sprite.jpg"
+            f"ffmpeg -vsync 0 -hwaccel nvdec -c:v h264_cuvid -y -hide_banner -loglevel panic -ss 00:00:00 -i '{org_file}' -vframes 1 -q:v 1 {file}-sprite.jpg"
         )
     else:
         os.system(
-            f"ffmpeg -y -hide_banner -loglevel panic -ss 00:00:02 -i '{org_file}' -vframes 1 -q:v 1 {file}-sprite.jpg"
+            f"ffmpeg -y -hide_banner -loglevel panic -ss 00:00:00 -i '{org_file}' -vframes 1 -q:v 1 {file}-sprite.jpg"
         )
     os.system(f"convert {file}-sprite.jpg -resize 320x180 {file}-sprite.jpg")
-    while frames > 1:
+    while time_left > interval:
         res = time.strftime("%H:%M:%S", time.gmtime(sec))
         if gpu:
             os.system(
@@ -133,7 +133,7 @@ def make_sprite(file, gpu=False):
         out_files.append(f"{file}-output{count1}.jpg")
         count1 += 1
         sec += interval
-        frames -= 1
+        time_left -= interval
     resolution = (
         subprocess.check_output(f"file {out_files[0]}", shell=True)
         .decode("utf-8")
@@ -144,7 +144,6 @@ def make_sprite(file, gpu=False):
     os.system(f"rm {file}-output*")
     return {
         "size": resolution,
-        "path": f"{org_file}-sprite.jpg",
         "interval": round(interval),
         "duration": length,
     }
@@ -152,21 +151,19 @@ def make_sprite(file, gpu=False):
 
 def thumber(file, gpu=False, preview=True, thumbnail=False):
     org_file = file
-    file = f"./{file}"
     try:
         if gpu:
             subprocess.check_output(
-                f"ffmpeg -vsync 0 -hwaccel nvdec -c:v h264_cuvid -t 30 -loglevel panic -i '{org_file}' -f null -",
+                f"ffmpeg -vsync 0 -hwaccel nvdec -c:v h264_cuvid -t 5 -loglevel panic -i '{org_file}' -f null -",
                 shell=True,
             )
         else:
             subprocess.check_output(
-                f"ffmpeg -t 30 -loglevel panic -i '{org_file}' -f null -", shell=True
+                f"ffmpeg -t 5 -loglevel panic -i '{org_file}' -f null -", shell=True
             )
     except subprocess.CalledProcessError as rsp:
         if rsp.returncode != 0:
             return False
-
     result = make_sprite(org_file)
     if preview:
         make_preview(org_file)
@@ -174,3 +171,13 @@ def thumber(file, gpu=False, preview=True, thumbnail=False):
         make_thumbnail(org_file)
     time.sleep(1)
     return result
+
+
+def check_length(file):
+    length = int(
+        subprocess.check_output(
+            f"ffprobe -i '{file}' -show_format -v quiet | sed -n 's/duration=//p' | awk '{{printf (\"%d\",$0)}}'",
+            shell=True,
+        ).decode("utf-8")
+    )
+    return length
